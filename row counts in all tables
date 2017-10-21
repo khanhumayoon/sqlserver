@@ -1,0 +1,19 @@
+/*
+===========================================================
+Executing T-SQL for each table in the database, for example
+===========================================================
+ROW COUNT in All Tables
+===========================================================
+06/09/2016
+Returns number of rows in each table of the database
+
+NOTE: the usage of system procedure sp_MSforeachtable
+===========================================================
+*/
+CREATE TABLE #rowcount (TableName VARCHAR(128), RowCnt INT)
+EXEC sp_MSforeachtable 'INSERT INTO #rowcount SELECT ''?'', COUNT(*) FROM ?'
+SELECT * FROM #rowcount ORDER BY TableName
+DROP TABLE #rowcount
+
+--TRUNCATE all tables in the database
+EXEC sp_MSforeachtable 'TRUNCATE TABLE ?'
