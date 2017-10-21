@@ -1,0 +1,1047 @@
+/*
+===========================================================
+INDEX
+===========================================================
+TABLES
+	FOREIGN KEY TABLE/COLUMN LIST
+
+METADATA
+	OBJECTS MODIFIED DATE TIME
+
+DATABASE
+	FILEGROUP / FILES
+	CREATE SCHEMA - IF NOT EXISTS
+	DROP DATABASE - CLOSING ALL CONNECTIONS
+	GENERATE DATABASE DEPLOYMENT SCRIPTS
+	BACKUP ALL DATABASES ON SQL INSTANCE
+	SHRINK DATABASE / LOG FILES, QUERY FILE NAMES
+			
+GENERAL
+	VALIDATE EMAIL
+	ROW COUNT in All Tables
+	TRUNCATE all tables in the database
+	DELETE A COLUMN IN ALL TABLES IN THE DATABASE
+	Add two columns in each table
+	ESCAPE Clause
+	NAME PARSING / PATTERN MATCHING
+	DYNAMIC SQL - PASS ARGUMENTS
+	Create Sequence Object
+	NOTE ABOUT SAVE POINT
+	FOR EACH DATABASE ON SQL INSTANCE
+	XP_CMDSHELL, WHO AM I & OTHER STATEMENTS
+	REMOVE DUPLICATES FROM TABLE
+
+PROCEDURES
+	PROCEDURE TEMPLATE WITH SAVE TRANSACTION / ERROR HANDLING
+
+ENCRYPTION
+	TRANSPARENT DATA ENCRYPTION (TDE)
+	Removing the Transparent Data Encryption (TDE) 
+
+FUNCTION
+	fn_GetPositions
+	fn_GetSplitValues
+	fn_HexToDecimal
+
+New Features - T-SQL 2012
+===========================================================
+*/
+
+/*
+===========================================================
+<<<<<TITLE OF SCRIPT>>>>>
+===========================================================
+MM/DD/YYYY
+A brief description 
+===========================================================
+*/
+
+
+/*
+===========================================================
+SHRINK DATABASE / LOG FILES, QUERY FILE NAMES
+===========================================================
+MM/DD/YYYY
+A brief description 
+===========================================================
+*/
+USE Dodson_ACG;  
+GO  
+DBCC SHRINKFILE (ACG_TestDb_log, 10);  
+GO 
+
+SELECT file_id, name  
+FROM sys.database_files; 
+
+
+
+
+/*
+===========================================================
+XP_CMDSHELL, WHO AM I & OTHER STATEMENTS
+===========================================================
+05/25/2017
+A brief description 
+===========================================================
+*/
+EXEC xp_cmdshell 'whoami'
+
+--verify if xp cmdshell is Enabled
+select * from sys.configurations 
+where name = 'xp_cmdshell'
+
+--enable xp cmdshell
+exec sp_configure 'xp_cmdshell', 1
+reconfigure
+
+
+
+
+/*
+===========================================================
+FOREIGN KEY TABLE/COLUMN LIST 
+===========================================================
+11/29/2016
+This query returns primary & foreign table / column names
+for the foreign key name provided in WHERE clause.
+===========================================================
+*/
+select 
+	constraint_object_id [Foreign Key Object Id],
+	object_name(constraint_object_id) [Foreign Key Name], 
+	object_name(parent_object_id) [Foreign Key Base Table],
+	c.name [Foreign Key Column],
+	object_name(referenced_object_id) [Primary Key Base Table],
+	r.name  [Primary Key Column]
+from sys.foreign_key_columns f
+	join sys.columns c on c.object_id = f.parent_object_id and c.column_id = f.parent_column_id
+	join sys.columns r on r.object_id = f.referenced_object_id and r.column_id = f.referenced_column_id
+where object_name(constraint_object_id)='FK_PROVIDER_RISK_LEVEL_ID'
+
+
+/*
+===========================================================
+OBJECTS MODIFIED DATE TIME 
+===========================================================
+09/07/2016
+
+To view if i changed any objects in the database i am
+working in
+===========================================================
+*/
+SELECT name, create_date, modify_date 
+FROM sys.objects
+--WHERE type = 'P' 
+order by modify_date desc, name
+
+/*
+===========================================================
+FILEGROUP / FILES 
+===========================================================
+09/02/2016
+
+This example -
+- Adds a new file group to the database FG1
+- Creates a new file on FG1 file group
+- Makes FG1 default filegroup for the database. So that
+  all future objects will automatically created on this 
+  filegroup unless specifically created on any other
+===========================================================
+*/
+USE [master]
+GO
+--drop database piercecouch
+
+--Create database
+CREATE DATABASE [PierceCouch]
+	CONTAINMENT = NONE
+	ON  PRIMARY 
+	( NAME = N'PierceCouch', FILENAME = N'C:\Program Files\Microsoft SQL Server\MSSQL12.SHARLAKSQL2K14\MSSQL\DATA\PierceCouch.mdf' , SIZE = 2256896KB , MAXSIZE = UNLIMITED, FILEGROWTH = 1024KB )
+		LOG ON 
+	( NAME = N'PierceCouch_log', FILENAME = N'C:\Program Files\Microsoft SQL Server\MSSQL12.SHARLAKSQL2K14\MSSQL\DATA\PierceCouch_log.ldf' , SIZE = 568896KB , MAXSIZE = 2048GB , FILEGROWTH = 10%)
+GO
+
+ALTER DATABASE [PierceCouch] SET COMPATIBILITY_LEVEL = 120
+GO
+
+--Add secondary filegroup
+ALTER DATABASE [PierceCouch] ADD FILEGROUP [FG1]
+GO
+
+--Add file to secondary filegroup
+ALTER DATABASE [PierceCouch] 
+	ADD FILE ( 
+		NAME = N'PierceCouch_File1', 
+		FILENAME = N'C:\Program Files\Microsoft SQL Server\MSSQL12.SHARLAKSQL2K14\MSSQL\DATA\PierceCouch_File1.ndf' , 
+		SIZE = 5120000KB , 
+		FILEGROWTH = 10%
+		) 
+		TO FILEGROUP [FG1]
+GO
+
+--Make secondary filegroup default
+ALTER DATABASE [PierceCouch]   
+MODIFY FILEGROUP FG1 DEFAULT;  
+GO
+
+/*
+===========================================================
+CREATE SCHEMA - IF NOT EXISTS
+===========================================================
+07/17/2016
+===========================================================
+*/
+IF NOT EXISTS ( SELECT  *
+                FROM    sys.schemas
+                WHERE   name = N'ACG' ) 
+    EXEC('CREATE SCHEMA [ACG] AUTHORIZATION [dbo]');
+GO
+/*
+===========================================================
+DROP DATABASE - CLOSING ALL CONNECTIONS
+===========================================================
+06/19/2016
+*/
+
+
+USE [master]
+GO
+IF EXISTS (SELECT * FROM sys.databases WHERE name = 'xx')
+BEGIN
+ALTER DATABASE xx SET  SINGLE_USER WITH ROLLBACK IMMEDIATE
+
+DROP DATABASE xx
+
+END
+
+/*
+===========================================================
+GENERATE DATABASE DEPLOYMENT SCRIPTS
+===========================================================
+06/18/2016
+These instructions are to create a deployment script file
+which will contain script execute statements for each file
+in a folder
+
+
+1. Inside the folder where all the *.sql script files are,
+   paste a command-line shortcut with "Start in" property
+   set to the current folder
+
+2. Double-click the command-line shortcut to open the dos
+   command window, enter the following command
+
+	dir *.sql /b > a_filenames.txt
+
+3. Open a new Powershell ISE and paste the following script, 
+   make sure to change the variable values to correct file locations.
+
+		[string] $outputFileName= "X:\Current\Folder\a_deploymentscripts.sql" ####change this appropriately
+		[string] $inputFileName="X:\Current\Folder\a_filenames.txt" ####change this appropriately
+		[string] $header="PRINT 'SERVER: '+@@SERVERNAME+': '+DB_NAME()`nPRINT 'DEPLOYMENT SCRIPTS...'`nPRINT GETDATE()`n`n"
+
+		[string] $output =
+			foreach ($server in (Get-Content $inputFileName)) 
+			{
+
+					write-output ":setvar ScriptName `"$server`"`n"
+					Write-Output "PRINT `'Executing `$(ScriptName)`'`n"
+					Write-Output "GO`n"
+					Write-Output ":r `$(ScriptName)`n"
+					Write-Output "PRINT ''`n"
+					Write-Output "GO`n`n"
+			}
+
+		$output = "$header $output"
+		$output > $outputFileName
+
+4. Open the generated deployment script file and make sure it's correct:
+      - make sure the generated deployment script file (with .sql extension)
+	    is also not included in deployment script
+	  - do divide scripts in sections to run first and next as, for ex
+	    object types should be created in order - Schemas, User-defined data types, tables
+		etc.
+			Schemas
+			User Defined Data types
+			Rule
+			Tables
+			Views
+			Functions--
+			Stored Procedures
+
+5. Issues & Fixes
+	- if commond line gives error that ' |s' is not recognized command
+	  while running directly using bat file, then run the actual "sqlcmd"
+	  from commond window by typing on console
+	  also, make sure there's no space between commands in "*.sql" file
+	  on each line on left, this may have caused by powershell linefeed 
+	  character. Look for a solution for that
+
+
+NOTE: Another way of doing this is to import file names in 
+      a SQL Server table with just one column and then 
+	  generate deployment statements for each file. Or,
+	  paste all file names in an Excel sheet and write VBA.
+
+*/
+
+/*
+===========================================================
+VALIDATE EMAIL 
+===========================================================
+08/05/2016
+===========================================================
+*/
+DECLARE @EMAIL VARCHAR(150)='TROOTEINTEGRALNUCLEAR.COM'
+
+SELECT IIF(@EMAIL NOT LIKE '[a-z,0-9,_,-,.]%@[a-z,0-9,_,-]%.[a-z][a-z]%', 'NO','YES')
+
+
+
+
+
+
+/*
+===========================================================
+Executing T-SQL for each table in the database, for example
+===========================================================
+ROW COUNT in All Tables
+===========================================================
+06/09/2016
+Returns number of rows in each table of the database
+
+NOTE: the usage of system procedure sp_MSforeachtable
+===========================================================
+*/
+CREATE TABLE #rowcount (TableName VARCHAR(128), RowCnt INT)
+EXEC sp_MSforeachtable 'INSERT INTO #rowcount SELECT ''?'', COUNT(*) FROM ?'
+SELECT * FROM #rowcount ORDER BY TableName
+DROP TABLE #rowcount
+
+--TRUNCATE all tables in the database
+EXEC sp_MSforeachtable 'TRUNCATE TABLE ?'
+
+--Add two columns in each table
+--==============================
+EXEC sp_MSforeachtable 'ALTER TABLE ? ADD PERIOD_START_DATE DATE, PERIOD_END_DATE DATE '
+
+--DELETE A COLUMN IN ALL TABLES IN THE DATABASE
+EXEC sp_MSforeachtable 
+'
+BEGIN TRY
+	ALTER TABLE ? DROP COLUMN column_b
+	PRINT ''COLUMN DELETED FROM TABLE: ?''
+END TRY
+
+BEGIN CATCH
+	PRINT ERROR_MESSAGE()
+END CATCH
+'
+
+
+/*
+===========================================================
+ESCAPE Clause
+===========================================================
+06/03/2016
+If we want to search for literal % in a char column
+===========================================================
+*/
+DECLARE @Products TABLE (ProdID INT, Comments VARCHAR(150))
+
+INSERT @Products VALUES
+	(1, 'Good product'),
+	(1, 'High % of profit'),
+	(1, 'No profit'),
+	(1, 'Low % of profit')
+
+--if we want to select only the ones who have a literal % in the comments
+SELECT *
+FROM @Products
+WHERE Comments LIKE '%/%%' ESCAPE '/'
+
+/*
+===========================================================
+NAME PARSING / PATTERN MATCHING
+===========================================================
+02/14/2016-
+-these are several methods of parsing a name into two
+ parts of it.
+ following examples are only demo t-sql language functions
+ not any particular solution of name parsing
+===========================================================
+*/
+--get location of first comma
+DECLARE @NAME VARCHAR(50) = 'METCALFE, MEGAN'
+SELECT PATINDEX('%,%',@NAME) NAME
+
+--positions of each space character's occurence in the given string, using recursive common table expressions
+DECLARE @NAME VARCHAR(50) = 'GEORGE HERBERT WALKER BUSH'
+DECLARE @CH CHAR(1) = ' ' --character to search
+
+;WITH CTE AS
+(
+	SELECT 
+		POS = CHARINDEX(@CH,@NAME), 
+		R = RIGHT(@NAME, DATALENGTH(@NAME)-CHARINDEX(@CH,@NAME))
+	UNION ALL
+	SELECT 
+		POS = POS + CHARINDEX(@CH,R),
+		R = RIGHT(R, DATALENGTH(R) - CHARINDEX(@CH,R))
+	FROM CTE
+	WHERE CHARINDEX(@CH,R)>0
+)
+SELECT POS FROM CTE
+
+--get values splitted at space character (this can be written more elegant. just needed it quick for HDI)
+DECLARE @NAME VARCHAR(50) = 'GEORGE HERBERT WALKER BUSH'
+DECLARE @CH CHAR(1) = ' ' --character to search
+
+;WITH CTE AS
+(
+	SELECT 
+		POS = CHARINDEX(@CH,@NAME),
+		VAL = LEFT(@NAME, CHARINDEX(@CH,@NAME)), 
+		R = RIGHT(@NAME, DATALENGTH(@NAME)-CHARINDEX(@CH,@NAME))
+	UNION ALL
+	SELECT 
+		POS = POS + CHARINDEX(@CH,R),
+		VAL = SUBSTRING(@NAME, POS,CHARINDEX(@CH,R)),
+		R = RIGHT(R, DATALENGTH(R) - CHARINDEX(@CH,R))
+	FROM CTE
+	WHERE CHARINDEX(@CH,R)>0
+)
+SELECT LTRIM(RTRIM(VAL)) VAL FROM CTE 
+UNION
+SELECT R FROM CTE WHERE POS=(SELECT MAX(POS) FROM CTE) 
+
+
+/*
+===========================================================
+DYNAMIC SQL - PASS ARGUMENTS
+===========================================================
+This example shows how to pass a variable
+to be used when dynamic sql statements execute.
+ 
+Variable @varOuter is declared outside the dynamic sql's scope
+therefore, it'll not be visible inside the dynamic sql.
+ 
+The way to use the @varOuter is to pass its value
+to the variable that will be visible inside the dynamic sql, 
+ie. @varInner
+===========================================================
+*/
+DECLARE @sql NVARCHAR(500), @args NVARCHAR(200)
+DECLARE @varOuter INT = 10
+ 
+SET @sql = 
+    '
+	DECLARE @result INT
+	SET @result = @varInner * 2
+	SELECT @result AS Result
+    '
+SET @args = '@varInner AS INT'
+ 
+--Execute dynamic sql
+EXECUTE sp_executesql @sql, @args, @varInner = @varOuter
+GO
+
+/*
+===========================================================
+New Features - T-SQL 2012
+===========================================================
+*/
+--IIF function (like VBA)
+SELECT (IIF (DAY(GETDATE()) > 9, '2-digit day value', '1-digit day value'))
+
+--CHOOSE function
+SELECT CHOOSE (3, 'ValueA', 'ValueB', 'ValueC') --returns ValueC
+SELECT CHOOSE (2, 'ValueA', 'ValueB', 'ValueC') --returns ValueB
+
+/*
+CONCAT
+The CONCAT function returns a concatenated string based on a list of
+values. The input values are converted to strings, and NULL values are converted
+to empty strings. For example, SELECT CONCAT (1, '- Example ', 'Concat - ',
+NULL, GETDATE()) returns “1- Example Concat - Sep 28 2011 12:17PM.”
+*/
+SELECT CONCAT (1, '- Example ', 'Concat - ',NULL, GETDATE())
+
+/*
+FORMAT
+This function returns a value based on the format supplied to the
+function. The FORMAT function takes numeric or date and time value as the first
+parameter and returns a value based on the format string of the second
+parameter. The format argument is based on the .Net framework format strings.
+
+You can provide an optional third parameter to specify the culture in which to
+format. 
+*/
+SELECT FORMAT(10,'C','en-US')
+SELECT FORMAT(GETDATE(),'MM/dd/yyyy','en-US')
+SELECT FORMAT(555231234,'###-##-####','en-US')
+
+/*
+PARSE
+The PARSE function converts a string value to a numeric or date and time
+data type. You can optionally specify the culture to use for the translation. If the
+translation is not possible, the function returns an error. 
+*/
+
+SELECT PARSE ('july 28 2011' AS DATETIME USING 'en-US')
+SELECT PARSE ('28 july 2011' AS DATETIME USING 'en-US')
+SELECT PARSE ('20150518' AS DATETIME USING 'en-US') --gives error
+SELECT PARSE ('20150518' AS INT) --works fine
+
+SELECT TRY_PARSE('28 de julio de 2011 ' AS DATETIME USING 'en-US') --returns NULL instead of error
+
+/*
+TRY_CONVERT
+this function returns NULL if conversion is not possible
+*/
+SELECT TRY_CONVERT (INT, '1^234') --will return a NULL value,
+SELECT TRY_CONVERT (INT, '1234')
+
+/*
+EOMONTH
+The EOMONTH function accepts a date parameter and returns the
+last day of the given month. You can provide an optional integer argument that
+will add the number of months given to the date parameter before returning the
+last day of the month. For example, SELECT EOMONTH ('9/15/2011',2) will add
+two months and return “2011-11-30 00:00:00.0000000.”
+*/
+
+SELECT EOMONTH ('9/15/2011',2) -- will return two months added
+SELECT EOMONTH ('9/15/2011',0) 
+
+/* NEW DATE TIME FUNCTIONS ***
+DATEFROMPARTS. DATEFROMPARTS returns a date value based on integer
+input values. The complete syntax is DATEFROMPARTS (year, month, day). For
+example, SELECT DATEFROMPARTS (2011,9,15) returns “2011-09-15.” The
+remaining functions are very similar to this function with a variation of output
+data types and input precision.
+• DATETIME2FROMPARTS. This function returns a datetime2 value based on
+integer input values. The complete syntax is DATETIME2FROMPARTS (year,
+month, day, hour, minute, seconds, fractions, precision).
+• DATETIMEFROMPARTS. This function returns a datetime value based on integer
+input values. The complete syntax is DATETIMEFROMPARTS (year, month, day,
+hour, minute, seconds, milliseconds).
+• DATETIMEOFFSETFROMPARTS. This function returns a datetimeoffest value
+based on integer input values. The complete syntax is
+DATETIMEOFFSETFROMPARTS (year, month, day, hour, minute, seconds,
+fractions, hour_offset, minute_offset, precision).
+• SMALLDATETIMEFROMPARTS. This function returns a smalldatetime value
+based on integer input values. The complete syntax is
+SMALLDATETIMEFROMPARTS (year, month, day, hour, minute).
+• TIMEFROMPARTS. This function returns a time value based on integer input
+values. The complete syntax is TIMEFROMPARTS (hour, minute, seconds,
+fractions, precision).
+*/
+
+/*
+===========================================================
+CREATE SEQUENCE OBJECT
+===========================================================
+Sequence Numbers
+A sequence is a new type of user-defined object in SQL Server 2012 that acts like a global identity column
+for the database. The default data type for a sequence object is bigint. A sequence object can be very
+useful, if you need to share a series of numbers between tables or if you need to know a value before
+performing an insert. For example, you can call the sequence object from the application, insert a row
+using that sequence number, and then run additional logic using the same sequence number to
+uniquely identify the row. You can even choose to cycle the sequence object so that it will start over
+when it reaches a specified value. You request the next sequence number using the NEXT VALUE FOR
+clause (see Listing 1-1).
+Note In addition to T-SQL, you can create and manage sequence objects using the Sequence folder located
+under the Programability node for the database in SSMS.
+Listing 1-1. Sequence Object Example
+*/
+CREATE SEQUENCE TestSequence
+AS BIGINT
+
+START WITH 1
+INCREMENT BY 1;
+
+--Create Table Using Default Sequence Numbers
+CREATE TABLE SequenceTest1
+(
+	Col1 BIGINT DEFAULT (NEXT VALUE FOR TestSequence),
+	Col2 CHAR(1)
+);
+
+--Create Table With No Default
+CREATE TABLE SequenceTest2
+(
+	Col1 BIGINT PRIMARY KEY,
+	Col2 CHAR(1)
+);
+
+--Insert 3 Rows Into SequenceTest1
+INSERT INTO SequenceTest1 (Col2) VALUES ('a'), ('b'), ('c');
+
+--Insert 3 Rows Into SequenceTest2
+INSERT INTO SequenceTest2 (Col1, Col2) VALUES 
+	(NEXT VALUE FOR TestSequence,'d'),
+	(NEXT VALUE FOR TestSequence,'e'),
+	(NEXT VALUE FOR TestSequence,'f');
+
+--Select The Data
+SELECT Col1, Col2 FROM SequenceTest1;
+SELECT Col1, Col2 FROM SequenceTest2;
+
+
+/*
+===========================================================
+ PROCEDURE TEMPLATE WITH SAVE TRANSACTION / ERROR HANDLING
+===========================================================
+12/02/2016
+This can be used to write any procedure. Seems like it'd be a good
+practice.
+However, it is best suited for transactions within
+nested procedures.
+
+It checks if there's an active transaction when the procedure was called
+if yes, then in case of error the ROLLBACK here will only rollback
+the transaction this procedure started, and not the entire transaction
+Note that in sql server, a ROLLBACK at the end of nested transactions
+will rollback every transaction in-between
+===========================================================
+ */
+IF EXISTS (SELECT name FROM sys.objects  WHERE name = N'usp_MyProcedure')  
+    DROP PROCEDURE usp_MyProcedure;  
+GO  
+CREATE PROCEDURE usp_MyProcedure  
+    @InputCandidateID INT  
+AS  
+ 
+    DECLARE @TranCounter INT = @@TRANCOUNT;  --to determine if caller had an active transaction
+    
+	IF @TranCounter > 0  
+        SAVE TRANSACTION usp_MyProcedure;  
+    ELSE  
+        -- Procedure must start its own transaction.  
+        BEGIN TRANSACTION;  
+			BEGIN TRY  
+				
+				-- do the work here
+
+				IF @TranCounter = 0  
+					-- @TranCounter = 0 means no transaction was  
+					-- started before the procedure was called.  
+					-- The procedure must commit the transaction  
+					-- it started.  
+					COMMIT TRANSACTION;  
+			END TRY  
+			BEGIN CATCH  
+				-- An error occurred; must determine  
+				-- which type of rollback will roll  
+				-- back only the work done in the  
+				-- procedure.  
+				IF @TranCounter = 0  
+					-- Transaction started in procedure.  
+					-- Roll back complete transaction.  
+					ROLLBACK TRANSACTION;  
+				ELSE  
+					-- Transaction started before procedure  
+					-- called, do not roll back modifications  
+					-- made before the procedure was called.  
+					IF XACT_STATE() <> -1  
+						-- If the transaction is still valid, just  
+						-- roll back to the savepoint set at the  
+						-- start of the stored procedure.  
+						ROLLBACK TRANSACTION ProcedureSave; 
+						
+						-- If the transaction is uncommitable, a  
+						-- rollback to the savepoint is not allowed  
+						-- because the savepoint rollback writes to  
+						-- the log. Just return to the caller, which  
+						-- should roll back the outer transaction.  
+  
+				-- After the appropriate rollback, echo error information to the caller.  
+				DECLARE @ErrorMessage NVARCHAR(4000);  
+				DECLARE @ErrorSeverity INT;  
+				DECLARE @ErrorState INT;  
+  
+				SELECT @ErrorMessage = ERROR_MESSAGE();  
+				SELECT @ErrorSeverity = ERROR_SEVERITY();  
+				SELECT @ErrorState = ERROR_STATE();  
+  
+				RAISERROR (@ErrorMessage, -- Message text.  
+						   @ErrorSeverity, -- Severity.  
+						   @ErrorState -- State.  
+						   );  
+			END CATCH  
+GO
+
+/*
+===========================================================
+NOTE ABOUT SAVE POINT
+===========================================================
+12/02/2016
+NOTE:-
+Savepoint names must conform to the rules for identifiers, 
+but are limited to 32 characters. transaction_name is always 
+case sensitive, even when the instance of SQL Server is not 
+case sensitive.
+===========================================================
+*/
+
+/*
+===========================================================
+TRANSPARENT DATA ENCRYPTION (TDE)
+===========================================================
+02/16/2015
+TDE protects data "at-rest". It doesn't protect data in-motion
+ie. across communication channels. 
+(see Always Encrypted feature of SQL Server 2016)
+
+Protecting a database with TDE: 
+1.  Create a master key
+2.  Create a certificate protected by the master key
+3.  Create the database encryption key (DEK) and protect it by the certificate
+4.  Enable TDE on the database
+
+* Transparent data encryption (TDE) performs real-time I/O encryption and 
+  decryption of the data and log files.
+
+* TDE protects data "at rest", meaning the data and log files
+
+* It provides the ability to comply with many laws
+
+* TDE does not provide encryption across communication channels
+
+* If you must restore or attach the database on another server, you must 
+  have backups of both the certificate and the private key or you will not 
+  be able to open the database
+
+* Encryption of the database file is performed at the page level
+  The pages in an encrypted database are encrypted before they are written 
+  to disk and decrypted when read into memory.
+
+* Backup files of databases that have TDE enabled are also encrypted by 
+  using the database encryption key. As a result, when you restore these 
+  backups, the certificate protecting the database encryption key must be 
+  available. This means that in addition to backing up the database, you 
+  have to make sure that you maintain backups of the server certificates to 
+  prevent data loss. Data loss will result if the certificate is no longer 
+  available 
+
+* After a database encryption key has been modified twice, a log backup must 
+  be performed before the database encryption key can be modified again.
+
+* Replication does not automatically replicate data from a TDE-enabled database 
+  in an encrypted form.
+
+* FILESTREAM data is not encrypted even when TDE is enabled
+
+* The tempdb system database will be encrypted if any other database on 
+  the instance of SQL Server is encrypted by using TDE. This might have a 
+  performance effect for unencrypted databases on the same instance of SQL Server. 
+  For more information about the tempdb system database
+
+===========================================================
+*/
+--  1.  Create the master key 
+USE master ;
+GO
+CREATE MASTER KEY
+ENCRYPTION BY PASSWORD = '@kh!Le$h';
+GO
+ 
+--  2.  Create a certificate protected by the master key
+CREATE CERTIFICATE MyTDECertificate 
+WITH SUBJECT = 'Certificate to protect the TDE key for HSK'
+GO
+ 
+--  3.  Create the database encryption key (DEK)
+USE HSK;
+GO
+CREATE DATABASE ENCRYPTION KEY
+WITH ALGORITHM = AES_128
+ENCRYPTION BY SERVER CERTIFICATE MyTDECertificate;
+GO
+ 
+--  4.  Enable the encryption on the database
+ALTER DATABASE HSK
+SET ENCRYPTION ON;
+GO
+
+/*
+===========================================================
+Removing the Transparent Data Encryption (TDE) 
+===========================================================
+MM/DD/YYYY
+from a database
+===========================================================
+*/
+ALTER DATABASE HSK
+SET ENCRYPTION OFF;
+GO
+ 
+USE HSK;
+GO
+ 
+--drop DEK
+DROP DATABASE ENCRYPTION KEY
+ 
+--drop Certificate
+USE master
+GO
+ 
+DROP CERTIFICATE MyTDECertificate
+ 
+--drop master key
+DROP MASTER KEY
+/* 
+=============================================
+-- Author:      Humayoon Khan
+-- Create date: 05/27/2016
+-- Description: Returns a list of all positions
+                of @SearchCharacter in the
+                @StringExpression
+-- Call:        
+ 
+    DECLARE @NAME VARCHAR(50) = 'GEORGE HERBERT WALKER BUSH'
+    DECLARE @CH CHAR(1) = ' ' --character to search
+ 
+    SELECT * FROM dbo.udf_GetPositions(@NAME, @CH)  
+ 
+ 
+============================================= 
+*/
+IF EXISTS (SELECT * FROM sys.objects WHERE name = 'udf_GetPositions' AND type_desc = 'SQL_TABLE_VALUED_FUNCTION') 
+    DROP FUNCTION dbo.udf_GetPositions
+GO
+ 
+CREATE FUNCTION dbo.udf_GetPositions 
+(
+    @StringExpression VARCHAR(MAX),
+    @SearchCharacter CHAR(1)
+)
+RETURNS
+@POSITIONS TABLE
+(
+    Position INT
+)
+AS
+BEGIN
+    ;WITH CTE AS
+    (
+        SELECT
+            POS = CHARINDEX(@SearchCharacter, @StringExpression), 
+            R = RIGHT(@StringExpression, DATALENGTH(@StringExpression)-CHARINDEX(@SearchCharacter,@StringExpression))
+        UNION ALL
+        SELECT
+            POS = POS + CHARINDEX(@SearchCharacter,R),
+            R = RIGHT(R, DATALENGTH(R) - CHARINDEX(@SearchCharacter,R))
+        FROM CTE
+        WHERE CHARINDEX(@SearchCharacter,R)>0
+    )
+    INSERT @POSITIONS
+    SELECT POS FROM CTE 
+        RETURN
+END
+GO
+
+
+/* =============================================
+-- Author:      Humayoon Khan
+-- Create date: 05/27/2016
+-- Description: Returns a list of all values splitted at
+                 @SearchCharacter in the
+                @StringExpression
+-- Call:        
+  
+    DECLARE @StringExpression VARCHAR(50) = 'GEORGE HERBERT WALKER BUSH'
+    DECLARE @SearchCharacter CHAR(1) = ' ' --character to search
+  
+    SELECT * FROM dbo.fn_GetSplitValues(@StringExpression, @SearchCharacter)   
+  
+  
+============================================= */
+IF EXISTS (SELECT * FROM sys.objects WHERE name = 'fn_GetSplitValues' AND type_desc = 'SQL_TABLE_VALUED_FUNCTION') 
+    DROP FUNCTION dbo.fn_GetSplitValues
+GO
+  
+CREATE FUNCTION dbo.fn_GetSplitValues 
+(
+    @StringExpression VARCHAR(MAX),
+    @SearchCharacter CHAR(1)
+)
+RETURNS
+@SPLIT_VALUES TABLE
+(
+    SplitValue VARCHAR(MAX)
+)
+AS
+BEGIN
+  
+;WITH CTE AS
+(
+    SELECT
+        POS = CHARINDEX(@SearchCharacter,@StringExpression),
+        VAL = LEFT(@StringExpression, CHARINDEX(@SearchCharacter,@StringExpression)), 
+        R = RIGHT(@StringExpression, DATALENGTH(@StringExpression)-CHARINDEX(@SearchCharacter,@StringExpression))
+    UNION ALL
+    SELECT
+        POS = POS + CHARINDEX(@SearchCharacter,R),
+        VAL = SUBSTRING(@StringExpression, POS,CHARINDEX(@SearchCharacter,R)),
+        R = RIGHT(R, DATALENGTH(R) - CHARINDEX(@SearchCharacter,R))
+    FROM CTE
+    WHERE CHARINDEX(@SearchCharacter,R)>0
+)
+INSERT @SPLIT_VALUES
+SELECT LTRIM(RTRIM(VAL)) VAL FROM CTE 
+UNION
+SELECT R FROM CTE WHERE POS=(SELECT MAX(POS) FROM CTE) 
+  
+RETURN
+  
+END
+
+-- ================================================
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+-- =============================================
+-- Author:      Humayoon Khan
+-- Create date: 11/23/2016
+-- Description: Converts a hexadecimal value to
+--              integer
+-- =============================================
+CREATE FUNCTION fn_HexToDecimal 
+(
+    @valueToConvert varchar(100)
+)
+RETURNS int
+AS
+BEGIN
+ 
+    declare @tbl table (he char(1), de smallint)
+    declare @valueToReturn int=0
+ 
+    insert @tbl values
+    ('0',0),('1',1),('2',2),('3',3),('4',4),('5',5),('6',6),('7',7),('8',8),('9',9),('A',10),('B',11),('C',12),('D',13),('E',14),('F',15)
+ 
+    declare @argLength smallint = len(@valuetoconvert)
+    declare @looper smallint = 1
+ 
+    while (@looper <= @argLength)
+    begin
+        declare @he char(1) = substring(@valueToConvert,@looper,1)
+        declare @de smallint = (select de from @tbl where he = @he)
+        set @valueToReturn = @valueToReturn + (@de * (power(16,@argLength - @looper)))
+        --print @valueToReturn
+        set @looper = @looper + 1
+    end
+ 
+    return @valueToReturn
+ 
+END
+GO
+
+/*
+===========================================================
+BACKUP ALL DATABASES ON SQL INSTANCE
+===========================================================
+03/04/2017
+
+backs up all databases on the sql instance 
+***on the line where BACKUP statement is actually executing
+there're some other options commented out, uncomment them
+as needed, ex- compression on backup file
+===========================================================
+*/
+
+DECLARE @name VARCHAR(50) -- database name  
+DECLARE @path VARCHAR(256) -- path for backup files  
+DECLARE @fileName VARCHAR(256) -- filename for backup  
+DECLARE @fileDate VARCHAR(20) -- used for file name
+ 
+-- specify database backup directory
+SET @path = 'C:\Backup\'  
+ 
+-- specify filename format
+SELECT @fileDate = CONVERT(VARCHAR(20),GETDATE(),112) 
+ 
+DECLARE db_cursor CURSOR FOR  
+SELECT name 
+FROM master.dbo.sysdatabases 
+WHERE name NOT IN ('master','model','msdb','tempdb')  -- exclude these databases
+ 
+OPEN db_cursor   
+FETCH NEXT FROM db_cursor INTO @name   
+ 
+WHILE @@FETCH_STATUS = 0   
+BEGIN   
+   SET @fileName = @path + @name + '_' + @fileDate + '.BAK'  
+   BACKUP DATABASE @name TO DISK = @fileName  --WITH  COPY_ONLY, NOFORMAT, INIT,  NAME = @name, SKIP, NOREWIND, NOUNLOAD, COMPRESSION,  STATS = 10  
+ 
+   FETCH NEXT FROM db_cursor INTO @name   
+END   
+
+ 
+CLOSE db_cursor   
+DEALLOCATE db_cursor
+
+
+
+/*
+===========================================================
+FOR EACH DATABASE ON SQL INSTANCE
+===========================================================
+05/22/2017
+
+an undocumented procedure. don't use in scripts of objects
+because it's not supported by microsoft
+
+following will print each databse name.
+
+it works like sp_msforeachtable
+===========================================================
+*/
+sp_MSforeachdb ' use [?];
+print db_name() '
+
+
+/*
+declare @valueToConvert varchar(100)='10ce'
+select dbo.fn_hextodecimal(@valuetoconvert)
+ 
+*/
+
+
+
+
+/*
+===========================================================
+REMOVE DUPLICATES FROM TABLE
+===========================================================
+05/22/2017
+===========================================================
+*/
+
+DECLARE @tbl TABLE (FirstName VARCHAR(25))
+ 
+INSERT @tbl VALUES
+
+	('John'),
+
+	('Robert'),
+
+	('John'),
+
+	('John')
+ 
+;WITH CTE AS
+(
+	SELECT *, ROW_NUMBER() OVER (PARTITION BY FirstName ORDER BY (SELECT NULL)) Rownum
+	FROM @tbl
+)
+
+SELECT * -- <<<=== Replace this SELECT with DELETE
+FROM CTE
+WHERE Rownum > 1
+
+
+
